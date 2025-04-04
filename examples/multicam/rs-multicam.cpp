@@ -6,15 +6,12 @@
 
 #include <map>
 #include <vector>
+#include "third-party/stb_image_write.h"
+#include <unistd.h>  // for sleep()
 
 int main(int argc, char * argv[]) try
 {
-    // Create a simple OpenGL window for rendering:
-    window app(1280, 960, "CPP Multi-Camera Example");
-
     rs2::context                          ctx;        // Create librealsense context for managing devices
-
-    std::map<std::string, rs2::colorizer> colorizers; // Declare map from device serial number to colorizer (utility class to convert depth data RGB colorspace)
 
     std::vector<rs2::pipeline>            pipelines;
 
@@ -32,38 +29,43 @@ int main(int argc, char * argv[]) try
         pipe.start(cfg);
         pipelines.emplace_back(pipe);
         // Map from each device's serial number to a different colorizer
-        colorizers[serial] = rs2::colorizer();
     }
 
     // We'll keep track of the last frame of each stream available to make the presentation persistent
     std::map<int, rs2::frame> render_frames;
 
     // Main app loop
-    while (app)
+    while (true)
     {
+        sleep(1);
         // Collect the new frames from all the connected devices
-        std::vector<rs2::frame> new_frames;
+        std::vector<rs2::depth_frame> new_frames;
         for (auto &&pipe : pipelines)
         {
             rs2::frameset fs;
             if (pipe.poll_for_frames(&fs))
             {
-                for (const rs2::frame& f : fs)
-                    new_frames.emplace_back(f);
+                new_frames.emplace_back(fs.get_depth_frame());
             }
         }
 
         // Convert the newly-arrived frames to render-friendly format
-        for (const auto& frame : new_frames)
+        for (const auto& depth : new_frames)
         {
             // Get the serial number of the current frame's device
-            auto serial = rs2::sensor_from_frame(frame)->get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+            auto serial = rs2::sensor_from_frame(depth)->get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
             // Apply the colorizer of the matching device and store the colorized frame
-            render_frames[frame.get_profile().unique_id()] = colorizers[serial].process(frame);
-        }
 
-        // Present all the collected frames with openGl mosaic
-        app.show(render_frames);
+            // Get the depth frame's dimensions
+            auto width = depth.get_width();
+            auto height = depth.get_height();
+
+            // Query the distance from the camera to the object in the center of the image
+            float dist_to_center = depth.get_distance(width / 2, height / 2);
+
+            // Print the distance
+            std::cout << "The camera " << std::string(serial) << " is facing an object " << dist_to_center << " meters away \n";
+        }
     }
 
     return EXIT_SUCCESS;
