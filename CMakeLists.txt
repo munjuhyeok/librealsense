@@ -113,6 +113,9 @@ endif()
 
 include(CMake/embedd_udev_rules.cmake)
 
+set(DEPENDENCIES realsense2)
+add_subdirectory(examples/multicam)
+
 if( BUILD_RS2_ALL )
     include( src/realsense2-all.cmake )
 endif()
